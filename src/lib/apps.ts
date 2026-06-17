@@ -32,7 +32,7 @@ export interface AppTile {
 export const APPS: AppTile[] = [
   {
     app_id: "legal",
-    name: "Юр-блок — документы и договоры",
+    name: "Юридический отдел",
     description: "Договоры, документы и сроки в наглядной диаграмме Ганта.",
     status: "active",
     ui_url: "http://localhost:5173/gantt",
