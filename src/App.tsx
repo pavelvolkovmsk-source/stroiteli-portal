@@ -1,18 +1,50 @@
-import { Route, Routes } from "react-router-dom";
+import { type ReactElement } from "react";
+import { Navigate, Route, Routes } from "react-router-dom";
 
-import Layout from "@/components/layout/Layout";
-import Dashboard from "@/pages/Dashboard";
+import AppLayout from "@/components/layout/AppLayout";
+import { isAuthed } from "@/lib/auth";
+import Admin from "@/pages/Admin";
+import Apps from "@/pages/Dashboard";
+import Login from "@/pages/Login";
+import Chat from "@/pages/cabinet/Chat";
+import IntegrationMap from "@/pages/cabinet/Map";
+import Overview from "@/pages/cabinet/Overview";
+import Projects from "@/pages/cabinet/Projects";
+
+/** Гард: пускает на защищённый маршрут только при наличии валидного токена. */
+function RequireAuth({ children }: { children: ReactElement }) {
+  return isAuthed() ? children : <Navigate to="/login" replace />;
+}
 
 /**
- * Корневой компонент портала «Хаб — кабинет руководителя».
- * Маршрутизация: главная страница — кабинет руководителя (плитки приложений).
+ * Кабинет генерального (центр экосистемы «Строители», поверх Hub).
+ *  /login    — вход (аккаунт Hub, user-login)
+ *  /         — Дашборд (сводка по событиям)
+ *  /projects — Проекты (карта со сквозными фильтрами)
+ *  /chat     — Чат сделки (из Bitrix)
+ *  /map      — Карта интеграций
+ *  /apps     — Приложения экосистемы (плитки)
+ *  /admin    — Доступы (матрица прав)
  */
 export default function App() {
   return (
-    <Layout>
-      <Routes>
-        <Route path="/" element={<Dashboard />} />
-      </Routes>
-    </Layout>
+    <Routes>
+      <Route path="/login" element={<Login />} />
+      <Route
+        element={
+          <RequireAuth>
+            <AppLayout />
+          </RequireAuth>
+        }
+      >
+        <Route path="/" element={<Overview />} />
+        <Route path="/projects" element={<Projects />} />
+        <Route path="/chat" element={<Chat />} />
+        <Route path="/map" element={<IntegrationMap />} />
+        <Route path="/apps" element={<Apps />} />
+        <Route path="/admin" element={<Admin />} />
+      </Route>
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 }

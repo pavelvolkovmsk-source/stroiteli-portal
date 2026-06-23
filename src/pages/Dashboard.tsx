@@ -39,12 +39,8 @@ export default function Dashboard() {
   return (
     <div className="space-y-8">
       <header className="space-y-1">
-        <h1 className="text-3xl font-bold tracking-tight">
-          Кабинет руководителя
-        </h1>
-        <p className="text-muted-foreground">
-          Все модули экосистемы «Строители»
-        </p>
+        <h1 className="text-2xl font-bold tracking-tight">Приложения экосистемы</h1>
+        <p className="text-sm text-muted-foreground">Все модули «Строителей»</p>
       </header>
 
       <section className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">

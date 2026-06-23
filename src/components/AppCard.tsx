@@ -1,4 +1,16 @@
-import { ExternalLink } from "lucide-react";
+import {
+  BarChart3,
+  Calculator,
+  ExternalLink,
+  HardHat,
+  LayoutGrid,
+  type LucideIcon,
+  Package,
+  Phone,
+  Scale,
+  ShoppingCart,
+  Truck,
+} from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -18,8 +30,21 @@ import type { AppTile } from "@/lib/apps";
  * и кнопка «Открыть». Если интерфейс ещё не подключён (ui_url === null),
  * кнопка неактивна и показывается подпись «Интерфейс подключается».
  */
+/** Иконки модулей экосистемы (lucide) — без эмодзи, по дизайн-канону. */
+const APP_ICONS: Record<string, LucideIcon> = {
+  legal: Scale,
+  cost: Calculator,
+  op_cabinet: Phone,
+  team_cabinet: HardHat,
+  purchases: ShoppingCart,
+  warehouse: Package,
+  logistics: Truck,
+  analytics: BarChart3,
+};
+
 export default function AppCard({ app }: { app: AppTile }) {
   const hasUi = app.ui_url !== null;
+  const Icon = APP_ICONS[app.app_id] ?? LayoutGrid;
 
   const open = () => {
     if (app.ui_url) {
@@ -33,12 +58,12 @@ export default function AppCard({ app }: { app: AppTile }) {
         <div className="flex items-start justify-between gap-3">
           <div
             className={cn(
-              "flex h-12 w-12 items-center justify-center rounded-lg text-2xl",
+              "flex h-12 w-12 items-center justify-center rounded-lg",
               app.accent,
             )}
             aria-hidden
           >
-            {app.icon}
+            <Icon className="h-6 w-6" />
           </div>
           <StatusBadge status={app.status} />
         </div>
