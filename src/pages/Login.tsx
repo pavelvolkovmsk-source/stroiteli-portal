@@ -34,8 +34,8 @@ export default function Login() {
   return (
     <div className="mx-auto max-w-sm space-y-6 pt-10">
       <header className="space-y-1">
-        <h1 className="text-2xl font-bold tracking-tight">Вход в управление доступами</h1>
-        <p className="text-sm text-muted-foreground">Аккаунт Hub (логин и пароль)</p>
+        <h1 className="text-2xl font-bold tracking-tight">Кабинет генерального</h1>
+        <p className="text-sm text-muted-foreground">Вход по аккаунту Hub (логин и пароль)</p>
       </header>
 
       <form onSubmit={onSubmit} className="space-y-4">
