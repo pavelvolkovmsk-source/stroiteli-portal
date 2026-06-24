@@ -29,6 +29,9 @@ export default function Header() {
           <Link to="/admin" className="text-muted-foreground transition-colors hover:text-foreground">
             Доступы
           </Link>
+          <Link to="/users" className="text-muted-foreground transition-colors hover:text-foreground">
+            Пользователи
+          </Link>
         </nav>
 
         {authed && (

@@ -6,6 +6,7 @@ import { isAuthed } from "@/lib/auth";
 import Admin from "@/pages/Admin";
 import Apps from "@/pages/Dashboard";
 import Login from "@/pages/Login";
+import Users from "@/pages/Users";
 import Chat from "@/pages/cabinet/Chat";
 import IntegrationMap from "@/pages/cabinet/Map";
 import Overview from "@/pages/cabinet/Overview";
@@ -25,6 +26,7 @@ function RequireAuth({ children }: { children: ReactElement }) {
  *  /map      — Карта интеграций
  *  /apps     — Приложения экосистемы (плитки)
  *  /admin    — Доступы (матрица прав)
+ *  /users    — Пользователи и доступы (суперадмин)
  */
 export default function App() {
   return (
@@ -43,6 +45,7 @@ export default function App() {
         <Route path="/map" element={<IntegrationMap />} />
         <Route path="/apps" element={<Apps />} />
         <Route path="/admin" element={<Admin />} />
+        <Route path="/users" element={<Users />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

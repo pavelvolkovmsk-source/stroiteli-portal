@@ -7,6 +7,7 @@ import {
   Network,
   LayoutGrid,
   ShieldCheck,
+  Users as UsersIcon,
   LogOut,
   PanelLeftClose,
   PanelLeftOpen,
@@ -29,6 +30,7 @@ const NAV_ITEMS: Array<{ to: string; label: string; icon: typeof LayoutDashboard
     { to: "/map", label: "Карта интеграций", icon: Network },
     { to: "/apps", label: "Приложения", icon: LayoutGrid },
     { to: "/admin", label: "Доступы", icon: ShieldCheck },
+    { to: "/users", label: "Пользователи", icon: UsersIcon },
   ];
 
 /** Подпись роли пользователя для бейджа в подвале сайдбара. */

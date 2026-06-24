@@ -73,6 +73,60 @@ export const putGrants = (subject: string, capabilities: string[]) =>
     body: JSON.stringify({ subject, capabilities }),
   });
 
+// ── пользователи и доступы (суперадмин) ─────────────────────────────────────────
+export interface UserRoleGrant {
+  app_id: string;
+  role: string;
+}
+
+export interface UserRow {
+  user_id: string;
+  login: string;
+  full_name: string | null;
+  is_active: boolean;
+  is_superadmin: boolean;
+  roles: UserRoleGrant[];
+}
+
+/** Пользователь без ролей — ответ create/update/PATCH. */
+export type UserBase = Omit<UserRow, "roles">;
+
+export interface CreateUserBody {
+  login: string;
+  password: string;
+  full_name?: string;
+  is_superadmin?: boolean;
+}
+
+export interface UpdateUserBody {
+  full_name?: string;
+  is_active?: boolean;
+  password?: string;
+}
+
+export const getAllUsers = () => req<UserRow[]>("/api/v1/users/all");
+
+export const createUser = (body: CreateUserBody) =>
+  req<UserBase>("/api/v1/users", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+
+export const updateUser = (userId: string, body: UpdateUserBody) =>
+  req<UserBase>(`/api/v1/users/${encodeURIComponent(userId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+
+export const setUserRoles = (userId: string, grants: UserRoleGrant[]) =>
+  req<{ user_id: string; roles: UserRoleGrant[] }>(
+    `/api/v1/users/${encodeURIComponent(userId)}/roles`,
+    {
+      method: "PUT",
+      body: JSON.stringify({ grants }),
+    },
+  );
+
 // ── события шины (дашборд кабинета) ────────────────────────────────────────────
 export interface EventItem {
   event_id: string;
