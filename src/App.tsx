@@ -8,6 +8,7 @@ import Apps from "@/pages/Dashboard";
 import Login from "@/pages/Login";
 import Users from "@/pages/Users";
 import Chat from "@/pages/cabinet/Chat";
+import EmbeddedApp from "@/pages/cabinet/EmbeddedApp";
 import IntegrationMap from "@/pages/cabinet/Map";
 import Overview from "@/pages/cabinet/Overview";
 import Projects from "@/pages/cabinet/Projects";
@@ -44,6 +45,7 @@ export default function App() {
         <Route path="/chat" element={<Chat />} />
         <Route path="/map" element={<IntegrationMap />} />
         <Route path="/apps" element={<Apps />} />
+        <Route path="/app/:appId" element={<EmbeddedApp />} />
         <Route path="/admin" element={<Admin />} />
         <Route path="/users" element={<Users />} />
       </Route>

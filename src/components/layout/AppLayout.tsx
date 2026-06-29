@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -8,6 +8,7 @@ import {
   LayoutGrid,
   ShieldCheck,
   Users as UsersIcon,
+  Calculator,
   LogOut,
   PanelLeftClose,
   PanelLeftOpen,
@@ -15,6 +16,7 @@ import {
 
 import { cn } from "@/lib/utils";
 import { clearToken, decodeToken } from "@/lib/auth";
+import { getAppsUi, type AppUi } from "@/lib/hubApi";
 
 const NAV_COLLAPSED_KEY = "cabinet_nav_collapsed";
 
@@ -33,6 +35,17 @@ const NAV_ITEMS: Array<{ to: string; label: string; icon: typeof LayoutDashboard
     { to: "/users", label: "Пользователи", icon: UsersIcon },
   ];
 
+/** Видна ли встраиваемая вкладка приложения текущему пользователю (visible_to_roles ∩ роли). */
+function appVisible(app: AppUi): boolean {
+  if (app.ui?.embed !== "iframe" || !app.ui?.ui_url) return false;
+  const p = decodeToken();
+  if (p?.is_superadmin) return true;
+  const need = app.ui.visible_to_roles;
+  if (!need || need.length === 0) return true;
+  const roles = p?.roles ?? [];
+  return roles.some((r) => need.includes(r));
+}
+
 /** Подпись роли пользователя для бейджа в подвале сайдбара. */
 function roleLabel(): string {
   const p = decodeToken();
@@ -49,6 +62,23 @@ function roleLabel(): string {
  */
 export default function AppLayout() {
   const navigate = useNavigate();
+
+  // Динамические вкладки встраиваемых приложений из реестра Hub (например, калькулятор cost).
+  // Грейсфул: при недоступности Hub остаётся только статичное меню.
+  const [embeddedApps, setEmbeddedApps] = useState<AppUi[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    getAppsUi()
+      .then((page) => {
+        if (!cancelled) setEmbeddedApps(page.items.filter(appVisible));
+      })
+      .catch(() => {
+        /* грейсфул: только статичное меню */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const [collapsed, setCollapsed] = useState<boolean>(
     () => localStorage.getItem(NAV_COLLAPSED_KEY) === "1",
@@ -121,6 +151,28 @@ export default function AppLayout() {
               {!collapsed && itemLabel}
             </NavLink>
           ))}
+          {embeddedApps.map((app) => {
+            const label = app.ui?.title ?? app.name;
+            return (
+              <NavLink
+                key={app.app_id}
+                to={`/app/${app.app_id}`}
+                title={collapsed ? label : undefined}
+                className={({ isActive }) =>
+                  cn(
+                    "flex items-center rounded-md py-2 text-sm font-medium transition-colors",
+                    collapsed ? "justify-center px-2" : "gap-3 px-3",
+                    isActive
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                  )
+                }
+              >
+                <Calculator className="h-4 w-4 shrink-0" />
+                {!collapsed && label}
+              </NavLink>
+            );
+          })}
         </nav>
 
         <div className={cn("space-y-3 border-t", collapsed ? "p-2" : "p-4")}>

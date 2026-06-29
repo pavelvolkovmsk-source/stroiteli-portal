@@ -1,9 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 
+import { decodeToken } from "@/lib/auth";
 import { getProjects, HubError, type ProjectRow } from "@/lib/hubApi";
-import { formatDateTime } from "./labels";
+import { formatDateTime, formatMoney } from "./labels";
 
 const ALL = "__all__";
+
+// Себестоимость — бизнес-тайна: только суперадмин/генеральный (НЕ обычный admin).
+function canSeeCost(): boolean {
+  const p = decodeToken();
+  return Boolean(p?.is_superadmin) || (p?.roles ?? []).includes("general");
+}
 
 /** Уникальные непустые значения поля для выпадающего фильтра. */
 function uniq(values: Array<string | null>): string[] {
@@ -56,6 +63,8 @@ export default function Projects() {
   const [stage, setStage] = useState(ALL);
   const [department, setDepartment] = useState(ALL);
   const [manager, setManager] = useState(ALL);
+
+  const showCost = useMemo(() => canSeeCost(), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -157,6 +166,8 @@ export default function Projects() {
                       <th className="px-5 py-2.5 font-medium">Отдел</th>
                       <th className="px-5 py-2.5 font-medium">Менеджер</th>
                       <th className="px-5 py-2.5 font-medium">Сумма</th>
+                      {showCost && <th className="px-5 py-2.5 font-medium">Себестоимость</th>}
+                      {showCost && <th className="px-5 py-2.5 font-medium">Маржа</th>}
                       <th className="px-5 py-2.5 font-medium">Обновлено</th>
                     </tr>
                   </thead>
@@ -173,6 +184,12 @@ export default function Projects() {
                         <td className="px-5 py-2.5 tabular-nums">
                           {r.opportunity != null ? r.opportunity.toLocaleString("ru-RU") : "—"}
                         </td>
+                        {showCost && (
+                          <td className="px-5 py-2.5 tabular-nums">{formatMoney(r.cost)}</td>
+                        )}
+                        {showCost && (
+                          <td className="px-5 py-2.5 tabular-nums">{formatMoney(r.margin)}</td>
+                        )}
                         <td className="px-5 py-2.5 text-muted-foreground">
                           {r.last_event_at ? formatDateTime(r.last_event_at) : "—"}
                         </td>

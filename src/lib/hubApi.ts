@@ -186,6 +186,9 @@ export interface ProjectRow {
   opportunity: number | null;
   last_event_type: string | null;
   last_event_at: string | null;
+  // Себестоимость/маржа по сделке (только генеральному; может отсутствовать). Деньги — строки.
+  cost?: string | null;
+  margin?: string | null;
 }
 
 export interface ProjectsPage {
@@ -194,3 +197,84 @@ export interface ProjectsPage {
 }
 
 export const getProjects = () => req<ProjectsPage>("/api/v1/projects");
+
+// ── сводка себестоимости/маржи (только генеральному) ────────────────────────────
+// Деньги приходят строками ("12345.67"), чтобы не терять точность. Форматировать
+// через Number(v).toLocaleString("ru-RU").
+export interface MoneyTotals {
+  revenue: string;
+  cost: string;
+  margin: string;
+  margin_pct: number | null;
+  orders_count: number;
+}
+
+export interface StatusBreakdownItem extends MoneyTotals {
+  status: string;
+}
+
+export interface TimelineItem extends MoneyTotals {
+  period: string;
+}
+
+export interface OrderLine {
+  order_id: number;
+  bitrix_deal_id: number | null;
+  project_id: number;
+  status: string;
+  created_at: string;
+  revenue: string;
+  cost: string;
+  margin: string;
+}
+
+export interface CostSummary {
+  totals: MoneyTotals;
+  by_status: StatusBreakdownItem[];
+  timeline?: TimelineItem[] | null;
+  orders?: OrderLine[] | null;
+  filters_applied: Record<string, unknown>;
+}
+
+export interface CostSummaryQuery {
+  status?: string;
+  project_id?: number;
+  start_date?: string;
+  end_date?: string;
+  timeline?: boolean;
+  orders?: boolean;
+}
+
+export const getCostSummary = (q: CostSummaryQuery = {}) =>
+  req<CostSummary>(
+    `/api/v1/cabinet/cost-summary${qs({
+      status: q.status,
+      project_id: q.project_id,
+      start_date: q.start_date,
+      end_date: q.end_date,
+      timeline: q.timeline ? "true" : undefined,
+      orders: q.orders ? "true" : undefined,
+    })}`,
+  );
+
+// ── реестр UI приложений (динамические вкладки + встраивание iframe) ─────────────
+export interface AppUiBlock {
+  title?: string;
+  icon?: string;
+  route?: string;
+  ui_url?: string;
+  category?: string;
+  order?: number;
+  visible_to_roles?: string[];
+  embed?: string;
+}
+
+export interface AppUi {
+  app_id: string;
+  name: string;
+  ui: AppUiBlock;
+  status: string;
+}
+
+export const getAppsUi = () =>
+  req<{ items: AppUi[]; total: number }>("/api/v1/apps/ui");

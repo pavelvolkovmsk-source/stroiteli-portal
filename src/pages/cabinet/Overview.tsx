@@ -1,15 +1,57 @@
 import { useEffect, useMemo, useState } from "react";
 
+import { decodeToken } from "@/lib/auth";
 import {
+  getCostSummary,
   getEvents,
   getEventsSummary,
   HubError,
+  type CostSummary,
   type EventItem,
   type EventsSummary,
+  type StatusBreakdownItem,
 } from "@/lib/hubApi";
-import { eventTypeLabel, formatDateTime, sourceLabel } from "./labels";
+import { eventTypeLabel, formatDateTime, formatMoney, sourceLabel } from "./labels";
 
 type Period = "7" | "30" | "all";
+
+// Себестоимость — бизнес-тайна: только суперадмин/генеральный (НЕ обычный admin).
+function canSeeCost(): boolean {
+  const p = decodeToken();
+  return Boolean(p?.is_superadmin) || (p?.roles ?? []).includes("general");
+}
+
+// KPI «план и факт»: Факт = оплачено+реализовано; План (в работе) = черновик+выставлен.
+const FACT_STATUSES = ["paid", "received"];
+const PLAN_STATUSES = ["draft", "sent_to_pay"];
+
+interface Bucket {
+  revenue: number;
+  cost: number;
+  margin: number;
+  marginPct: number | null;
+  count: number;
+}
+
+function sumBuckets(items: StatusBreakdownItem[], statuses: string[]): Bucket {
+  let revenue = 0;
+  let cost = 0;
+  let count = 0;
+  for (const it of items) {
+    if (!statuses.includes(it.status)) continue;
+    revenue += Number(it.revenue);
+    cost += Number(it.cost);
+    count += it.orders_count;
+  }
+  const margin = revenue - cost;
+  return {
+    revenue,
+    cost,
+    margin,
+    marginPct: revenue > 0 ? (margin / revenue) * 100 : null,
+    count,
+  };
+}
 
 const PERIODS: Array<{ key: Period; label: string }> = [
   { key: "7", label: "7 дней" },
@@ -78,8 +120,11 @@ export default function Overview() {
   const [period, setPeriod] = useState<Period>("30");
   const [summary, setSummary] = useState<EventsSummary | null>(null);
   const [recent, setRecent] = useState<EventItem[]>([]);
+  const [cost, setCost] = useState<CostSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const showCost = useMemo(() => canSeeCost(), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -87,14 +132,20 @@ export default function Overview() {
     setError(null);
 
     const start_date = startDateFor(period);
+    // Себестоимость — best-effort: 503/нет доступа НЕ роняют дашборд событий.
+    const costReq = showCost
+      ? getCostSummary({ start_date, timeline: true }).catch(() => null)
+      : Promise.resolve(null);
     Promise.all([
       getEventsSummary({ start_date }),
       getEvents({ start_date, limit: 20 }),
+      costReq,
     ])
-      .then(([sum, page]) => {
+      .then(([sum, page, costSum]) => {
         if (cancelled) return;
         setSummary(sum);
         setRecent(page.items);
+        setCost(costSum);
       })
       .catch((e: unknown) => {
         if (cancelled) return;
@@ -123,6 +174,8 @@ export default function Overview() {
     () => (summary?.by_source ?? []).map((r) => ({ key: r.source, count: r.count })),
     [summary],
   );
+  const fact = useMemo(() => (cost ? sumBuckets(cost.by_status, FACT_STATUSES) : null), [cost]);
+  const plan = useMemo(() => (cost ? sumBuckets(cost.by_status, PLAN_STATUSES) : null), [cost]);
 
   return (
     <div className="space-y-6">
@@ -160,6 +213,39 @@ export default function Overview() {
 
       {loading && !summary && (
         <p className="text-sm text-muted-foreground">Загрузка…</p>
+      )}
+
+      {showCost && cost && fact && plan && (
+        <section className="space-y-3">
+          <div>
+            <h2 className="text-sm font-semibold">Факт (оплачено и реализовано)</h2>
+            <div className="mt-2 grid grid-cols-2 gap-4 lg:grid-cols-4">
+              <KpiCard title="Выручка" value={`${formatMoney(fact.revenue)} ₽`} />
+              <KpiCard title="Себестоимость" value={`${formatMoney(fact.cost)} ₽`} />
+              <KpiCard title="Маржа" value={`${formatMoney(fact.margin)} ₽`} />
+              <KpiCard
+                title="Маржа, %"
+                value={fact.marginPct != null ? `${fact.marginPct.toFixed(1)}%` : "—"}
+                hint={`${fact.count} заказ(ов)`}
+              />
+            </div>
+          </div>
+          <div>
+            <h2 className="text-sm font-semibold text-muted-foreground">
+              План (в работе: черновики и выставленные)
+            </h2>
+            <div className="mt-2 grid grid-cols-2 gap-4 lg:grid-cols-4">
+              <KpiCard title="Выручка" value={`${formatMoney(plan.revenue)} ₽`} />
+              <KpiCard title="Себестоимость" value={`${formatMoney(plan.cost)} ₽`} />
+              <KpiCard title="Маржа" value={`${formatMoney(plan.margin)} ₽`} />
+              <KpiCard
+                title="Маржа, %"
+                value={plan.marginPct != null ? `${plan.marginPct.toFixed(1)}%` : "—"}
+                hint={`${plan.count} заказ(ов)`}
+              />
+            </div>
+          </div>
+        </section>
       )}
 
       {summary && (

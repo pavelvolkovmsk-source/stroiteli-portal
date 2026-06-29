@@ -21,8 +21,28 @@ const SOURCE_LABELS: Record<string, string> = {
   voronka: "Воронка",
 };
 
+const ORDER_STATUS_LABELS: Record<string, string> = {
+  draft: "Черновик",
+  sent_to_pay: "Выставлен",
+  paid: "Оплачен",
+  received: "Реализован",
+  cancelled: "Отменён",
+};
+
 export function eventTypeLabel(type: string): string {
   return EVENT_TYPE_LABELS[type] ?? type;
+}
+
+export function orderStatusLabel(status: string): string {
+  return ORDER_STATUS_LABELS[status] ?? status;
+}
+
+/** Денежная сумма (строка из API, напр. "12345.67") в формате ru с разделителями. */
+export function formatMoney(value: string | number | null | undefined): string {
+  if (value === null || value === undefined || value === "") return "—";
+  const n = typeof value === "number" ? value : Number(value);
+  if (Number.isNaN(n)) return "—";
+  return n.toLocaleString("ru-RU", { maximumFractionDigits: 0 });
 }
 
 export function sourceLabel(source: string): string {
