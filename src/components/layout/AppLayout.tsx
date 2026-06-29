@@ -95,10 +95,13 @@ export default function AppLayout() {
   const initial = label.charAt(0).toUpperCase();
 
   return (
-    <div className="flex min-h-screen bg-background text-foreground">
+    // h-screen + overflow-hidden: высота строго во весь экран, страница целиком не
+    // скроллится. Сайдбар фиксирован во всю высоту (подвал «Администратор» всегда внизу),
+    // а прокручивается только область контента справа (см. <main overflow-auto>).
+    <div className="flex h-screen overflow-hidden bg-background text-foreground">
       <aside
         className={cn(
-          "flex flex-col border-r bg-card transition-[width] duration-200",
+          "flex h-full flex-col border-r bg-card transition-[width] duration-200",
           collapsed ? "w-16" : "w-64",
         )}
       >
@@ -130,7 +133,7 @@ export default function AppLayout() {
           </button>
         </div>
 
-        <nav className="flex-1 space-y-1 p-3">
+        <nav className="flex-1 space-y-1 overflow-y-auto p-3">
           {NAV_ITEMS.map(({ to, label: itemLabel, icon: Icon, end }) => (
             <NavLink
               key={to}
