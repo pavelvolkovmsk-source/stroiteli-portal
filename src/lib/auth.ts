@@ -47,3 +47,18 @@ export function isAuthed(): boolean {
   if (payload.exp && payload.exp * 1000 < Date.now()) return false;
   return true;
 }
+
+/** Суперадмин Hub (глобальный root). Эксклюзив — вкладка «API». */
+export function isSuperadmin(): boolean {
+  return decodeToken()?.is_superadmin === true;
+}
+
+/**
+ * Полный доступ к управлению (Доступы, Пользователи и пр.): суперадмин ИЛИ
+ * генеральный (роль general — владелец компании). Генеральному доступно всё,
+ * кроме вкладки «API» (только суперадмин).
+ */
+export function canManage(): boolean {
+  const p = decodeToken();
+  return Boolean(p?.is_superadmin) || (p?.roles ?? []).includes("general");
+}

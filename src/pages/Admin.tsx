@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { decodeToken } from "@/lib/auth";
+import { canManage } from "@/lib/auth";
 import {
   getGrants,
   getPermApps,
@@ -42,7 +42,8 @@ export default function Admin() {
   const [saving, setSaving] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const isSuper = decodeToken()?.is_superadmin === true;
+  // Управление доступами доступно генеральному (general) и суперадмину.
+  const isSuper = canManage();
 
   useEffect(() => {
     let alive = true;

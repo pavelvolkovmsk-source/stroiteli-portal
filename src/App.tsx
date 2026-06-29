@@ -4,6 +4,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import AppLayout from "@/components/layout/AppLayout";
 import { isAuthed } from "@/lib/auth";
 import Admin from "@/pages/Admin";
+import Api from "@/pages/Api";
 import Apps from "@/pages/Dashboard";
 import Login from "@/pages/Login";
 import Users from "@/pages/Users";
@@ -48,6 +49,7 @@ export default function App() {
         <Route path="/app/:appId" element={<EmbeddedApp />} />
         <Route path="/admin" element={<Admin />} />
         <Route path="/users" element={<Users />} />
+        <Route path="/api" element={<Api />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

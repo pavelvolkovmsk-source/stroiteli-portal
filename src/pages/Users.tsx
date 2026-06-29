@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { decodeToken } from "@/lib/auth";
+import { canManage } from "@/lib/auth";
 import {
   createUser,
   getAllUsers,
@@ -49,7 +49,8 @@ export default function Users() {
   const [draftRoles, setDraftRoles] = useState<Set<string>>(new Set());
   const [savingRoles, setSavingRoles] = useState(false);
 
-  const isSuper = decodeToken()?.is_superadmin === true;
+  // Управление пользователями доступно генеральному (general) и суперадмину.
+  const isSuper = canManage();
 
   useEffect(() => {
     let alive = true;

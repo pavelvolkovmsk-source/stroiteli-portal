@@ -9,13 +9,14 @@ import {
   ShieldCheck,
   Users as UsersIcon,
   Calculator,
+  KeyRound,
   LogOut,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { clearToken, decodeToken } from "@/lib/auth";
+import { clearToken, decodeToken, isSuperadmin } from "@/lib/auth";
 import { getAppsUi, type AppUi } from "@/lib/hubApi";
 
 const NAV_COLLAPSED_KEY = "cabinet_nav_collapsed";
@@ -23,17 +24,24 @@ const NAV_COLLAPSED_KEY = "cabinet_nav_collapsed";
 /**
  * Пункты левого бара кабинета генерального. Маршруты — в src/App.tsx.
  * Текст только на русском, без эмодзи — дизайн-канон экосистемы.
+ * superOnly: пункт виден ТОЛЬКО суперадмину (генеральному недоступен) — напр. «API».
  */
-const NAV_ITEMS: Array<{ to: string; label: string; icon: typeof LayoutDashboard; end?: boolean }> =
-  [
-    { to: "/", label: "Дашборд", icon: LayoutDashboard, end: true },
-    { to: "/projects", label: "Проекты", icon: FolderKanban },
-    { to: "/chat", label: "Чат сделки", icon: MessagesSquare },
-    { to: "/map", label: "Карта интеграций", icon: Network },
-    { to: "/apps", label: "Приложения", icon: LayoutGrid },
-    { to: "/admin", label: "Доступы", icon: ShieldCheck },
-    { to: "/users", label: "Пользователи", icon: UsersIcon },
-  ];
+const NAV_ITEMS: Array<{
+  to: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  end?: boolean;
+  superOnly?: boolean;
+}> = [
+  { to: "/", label: "Дашборд", icon: LayoutDashboard, end: true },
+  { to: "/projects", label: "Проекты", icon: FolderKanban },
+  { to: "/chat", label: "Чат сделки", icon: MessagesSquare },
+  { to: "/map", label: "Карта интеграций", icon: Network },
+  { to: "/apps", label: "Приложения", icon: LayoutGrid },
+  { to: "/admin", label: "Доступы", icon: ShieldCheck },
+  { to: "/users", label: "Пользователи", icon: UsersIcon },
+  { to: "/api", label: "API", icon: KeyRound, superOnly: true },
+];
 
 /** Видна ли встраиваемая вкладка приложения текущему пользователю (visible_to_roles ∩ роли). */
 function appVisible(app: AppUi): boolean {
@@ -134,7 +142,8 @@ export default function AppLayout() {
         </div>
 
         <nav className="flex-1 space-y-1 overflow-y-auto p-3">
-          {NAV_ITEMS.map(({ to, label: itemLabel, icon: Icon, end }) => (
+          {NAV_ITEMS.filter((item) => !item.superOnly || isSuperadmin()).map(
+            ({ to, label: itemLabel, icon: Icon, end }) => (
             <NavLink
               key={to}
               to={to}
