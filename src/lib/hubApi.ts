@@ -7,6 +7,12 @@ import { clearToken, getToken } from "@/lib/auth";
 
 const BASE: string = import.meta.env.VITE_HUB_URL ?? "http://localhost:8000";
 
+// app_id при логине: Hub кладёт роли пользователя ИМЕННО этого приложения в JWT
+// (без app_id роли пустые). Кабинет встраивает cost, и его роли (в т.ч. `general`
+// для генерального) нужны и Кабинету, и cost-iframe. Единственное приложение в
+// реестре сейчас — cost. is_superadmin (супер-админ) работает независимо от app_id.
+const LOGIN_APP_ID: string = import.meta.env.VITE_LOGIN_APP_ID ?? "cost";
+
 export class HubError extends Error {
   status: number;
   constructor(message: string, status: number) {
@@ -39,7 +45,7 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
 export async function login(loginName: string, password: string): Promise<string> {
   const data = await req<{ access_token: string }>("/api/v1/auth/user-login", {
     method: "POST",
-    body: JSON.stringify({ login: loginName, password }),
+    body: JSON.stringify({ login: loginName, password, app_id: LOGIN_APP_ID }),
   });
   return data.access_token;
 }
