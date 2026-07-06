@@ -67,20 +67,25 @@ interface DiagramNode {
   kind: NodeKind;
 }
 
-const NODE_W = 190;
+const NODE_W = 170;
 const NODE_H = 48;
-const RIGHT_COL_X = 690;
+/** Ряд приложений (третий уровень) и его слоты по x. */
+const APPS_ROW_Y = 300;
+const APP_SLOT_X = [45, 251, 457, 663, 869];
 
-/** Фиксированная раскладка известных узлов (hub-and-spoke, слева направо). */
+/**
+ * Фиксированная раскладка: вертикальная иерархия.
+ * Сверху Hub, под ним Кабинет генерального, ниже ряд приложений, внизу Bitrix24.
+ */
 const KNOWN_NODES: Omit<DiagramNode, "w" | "h">[] = [
-  { id: "bitrix", label: "Bitrix24", x: 40, y: 262, kind: "external" },
-  { id: "hub", label: "Hub", x: 340, y: 262, kind: "core" },
-  { id: "cabinet", label: "Кабинет генерального", x: 340, y: 48, kind: "core" },
-  { id: "cost", label: "Себестоимость и КП", x: RIGHT_COL_X, y: 36, kind: "app" },
-  { id: "legal", label: "Юридический отдел", x: RIGHT_COL_X, y: 148, kind: "app" },
-  { id: "team_cabinet", label: "Кабинет бригадира", x: RIGHT_COL_X, y: 262, kind: "app" },
-  { id: "purchases", label: "Закупки", x: RIGHT_COL_X, y: 376, kind: "app" },
-  { id: "warehouse", label: "Склад (в будущем)", x: RIGHT_COL_X, y: 488, kind: "future" },
+  { id: "hub", label: "Hub", x: 455, y: 24, kind: "core" },
+  { id: "cabinet", label: "Кабинет генерального", x: 455, y: 136, kind: "core" },
+  { id: "cost", label: "Себестоимость и КП", x: APP_SLOT_X[0]!, y: APPS_ROW_Y, kind: "app" },
+  { id: "legal", label: "Юридический отдел", x: APP_SLOT_X[1]!, y: APPS_ROW_Y, kind: "app" },
+  { id: "team_cabinet", label: "Кабинет бригадира", x: APP_SLOT_X[2]!, y: APPS_ROW_Y, kind: "app" },
+  { id: "purchases", label: "Закупки", x: APP_SLOT_X[3]!, y: APPS_ROW_Y, kind: "app" },
+  { id: "warehouse", label: "Склад (в будущем)", x: APP_SLOT_X[4]!, y: APPS_ROW_Y, kind: "future" },
+  { id: "bitrix", label: "Bitrix24", x: 455, y: 470, kind: "external" },
 ];
 
 /** Свободный текст из манифестов → id канонического узла (или null → новый узел). */
@@ -125,83 +130,63 @@ function edgeGeometry(
   hasReverse: boolean,
   isReverse: boolean,
 ): { d: string; mid: [number, number] } {
-  const dx = to.x - from.x;
+  const fromCx = from.x + from.w / 2;
+  const toCx = to.x + to.w / 2;
+  const dxc = toCx - fromCx;
   const dy = to.y - from.y;
-  const off = hasReverse ? (isReverse ? 9 : -9) : 0;
+  const off = hasReverse ? (isReverse ? 11 : -11) : 0;
 
-  // Одна колонка (правый столбец приложений): дуга сбоку от колонки.
-  if (Math.abs(dx) < 10) {
-    const far = Math.abs(dy) > 160;
-    if (far) {
-      // Дальняя пара (напр. Себестоимость ↔ Закупки) — дуга справа от колонки.
-      const bow = isReverse ? 78 : 46;
-      const p0: [number, number] = [from.x + from.w, from.y + from.h / 2];
-      const p3: [number, number] = [to.x + to.w, to.y + to.h / 2];
-      const cx = from.x + from.w + bow;
-      const p1: [number, number] = [cx, p0[1]];
-      const p2: [number, number] = [cx, p3[1]];
-      return {
-        d: `M ${p0[0]} ${p0[1]} C ${p1[0]} ${p1[1]}, ${p2[0]} ${p2[1]}, ${p3[0]} ${p3[1]}`,
-        mid: bezierPoint(0.5, p0, p1, p2, p3),
-      };
-    }
-    // Соседи по колонке — короткая дуга слева.
-    const bow = isReverse ? 84 : 54;
-    const p0: [number, number] = [from.x, from.y + from.h / 2];
-    const p3: [number, number] = [to.x, to.y + to.h / 2];
-    const cx = from.x - bow;
-    const p1: [number, number] = [cx, p0[1]];
-    const p2: [number, number] = [cx, p3[1]];
-    return {
-      d: `M ${p0[0]} ${p0[1]} C ${p1[0]} ${p1[1]}, ${p2[0]} ${p2[1]}, ${p3[0]} ${p3[1]}`,
-      mid: bezierPoint(0.5, p0, p1, p2, p3),
-    };
-  }
-
-  // Одна строка (Bitrix ↔ Hub): почти прямая, парные — с вертикальным сдвигом.
-  if (Math.abs(dy) < 10) {
-    const leftToRight = dx > 0;
-    const p0: [number, number] = leftToRight
-      ? [from.x + from.w, from.y + from.h / 2 + off]
-      : [from.x, from.y + from.h / 2 + off];
-    const p3: [number, number] = leftToRight
-      ? [to.x, to.y + to.h / 2 + off]
-      : [to.x + to.w, to.y + to.h / 2 + off];
-    return {
-      d: `M ${p0[0]} ${p0[1]} L ${p3[0]} ${p3[1]}`,
-      mid: [(p0[0] + p3[0]) / 2, p0[1]],
-    };
-  }
-
-  // Одна колонка по x у пары hub/cabinet: вертикальная стрелка.
-  if (Math.abs(dx) < NODE_W && Math.abs(dy) > 100 && from.x === to.x) {
-    const goingUp = dy < 0;
-    const p0: [number, number] = [
-      from.x + from.w / 2 + off,
-      goingUp ? from.y : from.y + from.h,
-    ];
-    const p3: [number, number] = [to.x + to.w / 2 + off, goingUp ? to.y + to.h : to.y];
-    return {
-      d: `M ${p0[0]} ${p0[1]} L ${p3[0]} ${p3[1]}`,
-      mid: [p0[0], (p0[1] + p3[1]) / 2],
-    };
-  }
-
-  // Общий случай: плавная кривая от края к краю.
-  const leftToRight = dx > 0;
-  const p0: [number, number] = leftToRight
-    ? [from.x + from.w, from.y + from.h / 2 + off]
-    : [from.x, from.y + from.h / 2 + off];
-  const p3: [number, number] = leftToRight
-    ? [to.x, to.y + to.h / 2 + off]
-    : [to.x + to.w, to.y + to.h / 2 + off];
-  const mx = (p0[0] + p3[0]) / 2;
-  const p1: [number, number] = [mx, p0[1]];
-  const p2: [number, number] = [mx, p3[1]];
-  return {
+  const curve = (
+    p0: [number, number],
+    p1: [number, number],
+    p2: [number, number],
+    p3: [number, number],
+  ) => ({
     d: `M ${p0[0]} ${p0[1]} C ${p1[0]} ${p1[1]}, ${p2[0]} ${p2[1]}, ${p3[0]} ${p3[1]}`,
     mid: bezierPoint(0.5, p0, p1, p2, p3),
-  };
+  });
+
+  // Один ряд (приложения): соседи — дуга НАД рядом, дальние — дуга ПОД рядом.
+  if (Math.abs(dy) < 10) {
+    const near = Math.abs(dxc) < 320;
+    const dir = dxc > 0 ? 1 : -1;
+    if (near) {
+      const bow = isReverse ? 78 : 46;
+      const p0: [number, number] = [fromCx + dir * 40, from.y];
+      const p3: [number, number] = [toCx - dir * 40, to.y];
+      return curve(p0, [p0[0], p0[1] - bow], [p3[0], p3[1] - bow], p3);
+    }
+    const bow = isReverse ? 92 : 58;
+    const p0: [number, number] = [fromCx + dir * 40, from.y + from.h];
+    const p3: [number, number] = [toCx - dir * 40, to.y + to.h];
+    return curve(p0, [p0[0], p0[1] + bow], [p3[0], p3[1] + bow], p3);
+  }
+
+  // Одна вертикальная ось (Hub/Кабинет/Bitrix).
+  if (Math.abs(dxc) < 10) {
+    const goingUp = dy < 0;
+    // Соседние уровни — прямая вертикальная стрелка.
+    if (Math.abs(dy) < 220) {
+      const p0: [number, number] = [fromCx + off, goingUp ? from.y : from.y + from.h];
+      const p3: [number, number] = [toCx + off, goingUp ? to.y + to.h : to.y];
+      return {
+        d: `M ${p0[0]} ${p0[1]} L ${p3[0]} ${p3[1]}`,
+        mid: [p0[0], (p0[1] + p3[1]) / 2],
+      };
+    }
+    // Дальняя пара (Bitrix ↔ Hub через все уровни) — большая дуга слева от схемы.
+    const cx = isReverse ? 96 : 152;
+    const p0: [number, number] = [from.x, from.y + from.h / 2];
+    const p3: [number, number] = [to.x, to.y + to.h / 2];
+    return curve(p0, [cx, p0[1]], [cx, p3[1]], p3);
+  }
+
+  // Общий случай (разные уровни): S-кривая от нижней/верхней грани к грани.
+  const goingUp = dy < 0;
+  const p0: [number, number] = [fromCx + off, goingUp ? from.y : from.y + from.h];
+  const p3: [number, number] = [toCx + off, goingUp ? to.y + to.h : to.y];
+  const midY = (p0[1] + p3[1]) / 2;
+  return curve(p0, [p0[0], midY], [p3[0], midY], p3);
 }
 
 const NODE_STYLES: Record<NodeKind, { rect: string; text: string; dash?: string }> = {
@@ -239,9 +224,12 @@ export default function IntegrationMap() {
   // Узлы и агрегированные стрелки схемы (незнакомые контрагенты — доп. узлы снизу).
   const { nodes, edges, rowEdgeKey } = useMemo(() => {
     const nodeMap = new Map<string, DiagramNode>();
-    for (const n of KNOWN_NODES) nodeMap.set(n.id, { ...n, w: NODE_W, h: NODE_H });
+    for (const n of KNOWN_NODES) {
+      const wide = n.id === "hub" || n.id === "cabinet" || n.id === "bitrix";
+      nodeMap.set(n.id, { ...n, w: wide ? 190 : NODE_W, h: NODE_H });
+    }
 
-    let extraY = 488 + 112;
+    let extraSlot = 0;
     const idOf = (raw: string): string => {
       const known = normalizeNode(raw);
       if (known) return known;
@@ -250,13 +238,13 @@ export default function IntegrationMap() {
         nodeMap.set(dynId, {
           id: dynId,
           label: raw,
-          x: RIGHT_COL_X,
-          y: extraY,
+          x: APP_SLOT_X[extraSlot % APP_SLOT_X.length]!,
+          y: APPS_ROW_Y + 86 * (1 + Math.floor(extraSlot / APP_SLOT_X.length)),
           w: NODE_W,
           h: NODE_H,
           kind: "future",
         });
-        extraY += 112;
+        extraSlot += 1;
       }
       return dynId;
     };
@@ -331,8 +319,8 @@ export default function IntegrationMap() {
         </div>
         <div className="overflow-x-auto p-4">
           <svg
-            viewBox={`0 0 940 ${viewH}`}
-            className="mx-auto block h-auto w-full min-w-[820px] max-w-[1040px]"
+            viewBox={`0 0 1080 ${viewH}`}
+            className="mx-auto block h-auto w-full min-w-[900px] max-w-[1160px]"
             role="img"
             aria-label="Схема потоков данных экосистемы"
           >
