@@ -17,16 +17,42 @@ import {
 
 const roleKey = (appId: string, role: string) => `${appId}|${role}`;
 
-/** Краткая подпись ролей пользователя для колонки таблицы. */
+// Русские подписи ролей. Коды приходят из манифестов ПО (roles_hint); если код
+// незнаком — показываем как есть.
+const ROLE_LABELS: Record<string, string> = {
+  general: "Генеральный",
+  owner: "Владелец",
+  admin: "Администратор",
+  manager: "Менеджер",
+  agent: "Агент",
+  head: "Руководитель",
+  lawyer: "Юрист",
+  jurist: "Юрист",
+  accountant: "Бухгалтерия",
+  foreman: "Прораб",
+  contractor: "Подрядчик",
+  kadastr: "Кадастровый инженер",
+};
+const roleLabel = (code: string) => ROLE_LABELS[code] ?? code;
+
+/** Краткая подпись ролей пользователя для колонки таблицы (роли — по-русски). */
 function rolesLabel(roles: UserRoleGrant[]): string {
   if (roles.length === 0) return "—";
-  return roles.map((r) => `${r.app_id}:${r.role}`).join(", ");
+  return roles.map((r) => `${r.app_id}: ${roleLabel(r.role)}`).join(", ");
+}
+
+function grantsFromKeys(keys: Iterable<string>): UserRoleGrant[] {
+  return [...keys].map((k) => {
+    const sep = k.indexOf("|");
+    return { app_id: k.slice(0, sep), role: k.slice(sep + 1) };
+  });
 }
 
 /**
- * Экран «Пользователи и доступы» (только суперадмин). Список всех пользователей Hub,
- * создание пользователя, сброс пароля, вкл/выкл активности и редактирование ролей
- * (полная замена через PUT /users/{id}/roles). Стиль — как у «Управления доступами».
+ * Экран «Пользователи и доступы» (генеральный/суперадмин). Список пользователей Hub,
+ * создание пользователя СРАЗУ с ролями по ПО, и карточка сотрудника (провалиться →
+ * логин, задать новый пароль, роли). Роли — по-русски. Старый пароль показать нельзя
+ * (хранится хешем) — можно только задать новый.
  */
 export default function Users() {
   const navigate = useNavigate();
@@ -42,15 +68,20 @@ export default function Users() {
   const [newPassword, setNewPassword] = useState("");
   const [newFullName, setNewFullName] = useState("");
   const [newSuper, setNewSuper] = useState(false);
+  const [newRoles, setNewRoles] = useState<Set<string>>(new Set());
   const [creating, setCreating] = useState(false);
 
-  // редактор ролей: открытый пользователь + черновик его ролей
+  // карточка сотрудника: открытый пользователь + черновик ролей + новый пароль
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [draftRoles, setDraftRoles] = useState<Set<string>>(new Set());
   const [savingRoles, setSavingRoles] = useState(false);
+  const [editorPwd, setEditorPwd] = useState("");
+  const [savingPwd, setSavingPwd] = useState(false);
 
   // Управление пользователями доступно генеральному (general) и суперадмину.
   const isSuper = canManage();
+  // Есть ли вообще роли для назначения (по манифестам ПО).
+  const hasAssignableRoles = apps.some((a) => a.roles_hint.length > 0);
 
   useEffect(() => {
     let alive = true;
@@ -83,6 +114,16 @@ export default function Users() {
     return false;
   }
 
+  function toggleNewRole(appId: string, role: string) {
+    const k = roleKey(appId, role);
+    setNewRoles((prev) => {
+      const s = new Set(prev);
+      if (s.has(k)) s.delete(k);
+      else s.add(k);
+      return s;
+    });
+  }
+
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     setNotice(null);
@@ -100,33 +141,25 @@ export default function Users() {
     setCreating(true);
     try {
       const created = await createUser(body);
-      setUsers((prev) => [...prev, { ...created, roles: [] }]);
+      // Назначаем выбранные роли сразу после создания (если не суперадмин — у него
+      // и так полный доступ).
+      let roles: UserRoleGrant[] = [];
+      if (!newSuper && newRoles.size > 0) {
+        const res = await setUserRoles(created.user_id, grantsFromKeys(newRoles));
+        roles = res.roles;
+      }
+      setUsers((prev) => [...prev, { ...created, roles }]);
       setNewLogin("");
       setNewPassword("");
       setNewFullName("");
       setNewSuper(false);
+      setNewRoles(new Set());
       setNotice(`Пользователь «${created.login}» создан`);
     } catch (e) {
       if (on401(e)) return;
       setNotice(e instanceof Error ? `Не создан: ${e.message}` : "Не создан");
     } finally {
       setCreating(false);
-    }
-  }
-
-  async function handleResetPassword(u: UserRow) {
-    const pwd = window.prompt(`Новый пароль для «${u.login}»:`);
-    if (pwd == null || pwd === "") return;
-    setBusy(u.user_id);
-    setNotice(null);
-    try {
-      await updateUser(u.user_id, { password: pwd });
-      setNotice(`Пароль для «${u.login}» сброшен`);
-    } catch (e) {
-      if (on401(e)) return;
-      setNotice(e instanceof Error ? `Не сохранено: ${e.message}` : "Не сохранено");
-    } finally {
-      setBusy(null);
     }
   }
 
@@ -146,9 +179,10 @@ export default function Users() {
     }
   }
 
-  function openRolesEditor(u: UserRow) {
+  function openEditor(u: UserRow) {
     setEditingUserId(u.user_id);
     setDraftRoles(new Set(u.roles.map((r) => roleKey(r.app_id, r.role))));
+    setEditorPwd("");
     setNotice(null);
   }
 
@@ -164,24 +198,35 @@ export default function Users() {
 
   async function handleSaveRoles() {
     if (!editingUserId) return;
-    const grants: UserRoleGrant[] = [...draftRoles].map((k) => {
-      const sep = k.indexOf("|");
-      return { app_id: k.slice(0, sep), role: k.slice(sep + 1) };
-    });
     setSavingRoles(true);
     setNotice(null);
     try {
-      const res = await setUserRoles(editingUserId, grants);
+      const res = await setUserRoles(editingUserId, grantsFromKeys(draftRoles));
       setUsers((prev) =>
         prev.map((x) => (x.user_id === editingUserId ? { ...x, roles: res.roles } : x)),
       );
-      setEditingUserId(null);
       setNotice("Роли сохранены");
     } catch (e) {
       if (on401(e)) return;
       setNotice(e instanceof Error ? `Не сохранено: ${e.message}` : "Не сохранено");
     } finally {
       setSavingRoles(false);
+    }
+  }
+
+  async function handleSavePassword() {
+    if (!editingUserId || !editorPwd) return;
+    setSavingPwd(true);
+    setNotice(null);
+    try {
+      await updateUser(editingUserId, { password: editorPwd });
+      setNotice(`Пароль для «${editingUser?.login ?? ""}» сохранён`);
+      setEditorPwd("");
+    } catch (e) {
+      if (on401(e)) return;
+      setNotice(e instanceof Error ? `Не сохранено: ${e.message}` : "Не сохранено");
+    } finally {
+      setSavingPwd(false);
     }
   }
 
@@ -198,13 +243,13 @@ export default function Users() {
       <header className="space-y-1">
         <h1 className="text-3xl font-bold tracking-tight">Пользователи и доступы</h1>
         <p className="text-muted-foreground">
-          Учётные записи Hub: создание, активность, сброс пароля и роли по приложениям
+          Учётные записи Hub: создание с ролями по ПО, активность, смена пароля
         </p>
       </header>
 
       {!isSuper && (
         <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          Раздел доступен только суперадмину. Hub отклонит изменения, если у вас нет прав.
+          Раздел доступен только генеральному и суперадмину. Hub отклонит изменения, если у вас нет прав.
         </p>
       )}
       {notice && <p className="text-sm text-foreground">{notice}</p>}
@@ -242,6 +287,7 @@ export default function Users() {
               className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
             />
           </label>
+
           <label className="flex items-center gap-2 text-sm sm:col-span-2">
             <input
               type="checkbox"
@@ -249,8 +295,46 @@ export default function Users() {
               checked={newSuper}
               onChange={(e) => setNewSuper(e.target.checked)}
             />
-            <span>Суперадмин</span>
+            <span>Суперадмин (полный доступ ко всем ПО, роли не нужны)</span>
           </label>
+
+          {/* роли по ПО прямо при создании */}
+          {!newSuper && (
+            <div className="space-y-3 sm:col-span-2 rounded-md border bg-background/50 p-3">
+              <p className="text-sm font-medium">Роли по ПО</p>
+              {!hasAssignableRoles && (
+                <p className="text-xs text-muted-foreground">
+                  Нет приложений с объявленными ролями (roles_hint в манифесте).
+                </p>
+              )}
+              {apps.map((app) =>
+                app.roles_hint.length === 0 ? null : (
+                  <div key={app.app_id} className="space-y-1.5">
+                    <h3 className="text-sm">
+                      {app.name} <span className="text-muted-foreground">· {app.app_id}</span>
+                    </h3>
+                    <div className="flex flex-wrap gap-4">
+                      {app.roles_hint.map((role) => {
+                        const k = roleKey(app.app_id, role);
+                        return (
+                          <label key={k} className="flex items-center gap-2 text-sm">
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 cursor-pointer accent-primary"
+                              checked={newRoles.has(k)}
+                              onChange={() => toggleNewRole(app.app_id, role)}
+                            />
+                            <span>{roleLabel(role)}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ),
+              )}
+            </div>
+          )}
+
           <div className="sm:col-span-2">
             <button
               type="submit"
@@ -303,14 +387,6 @@ export default function Users() {
                       <button
                         type="button"
                         disabled={busy === u.user_id}
-                        onClick={() => handleResetPassword(u)}
-                        className="rounded-md border px-2.5 py-1 text-xs transition-colors hover:bg-accent disabled:opacity-50"
-                      >
-                        Сбросить пароль
-                      </button>
-                      <button
-                        type="button"
-                        disabled={busy === u.user_id}
                         onClick={() => handleToggleActive(u)}
                         className="rounded-md border px-2.5 py-1 text-xs transition-colors hover:bg-accent disabled:opacity-50"
                       >
@@ -318,10 +394,10 @@ export default function Users() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => openRolesEditor(u)}
+                        onClick={() => openEditor(u)}
                         className="rounded-md border px-2.5 py-1 text-xs transition-colors hover:bg-accent"
                       >
-                        Роли
+                        Открыть
                       </button>
                     </div>
                   </td>
@@ -339,17 +415,18 @@ export default function Users() {
         </div>
       </section>
 
-      {/* редактор ролей */}
+      {/* карточка сотрудника: логин + смена пароля + роли */}
       {editingUser && (
-        <section className="space-y-4 rounded-lg border bg-card p-5">
+        <section className="space-y-5 rounded-lg border bg-card p-5">
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 className="text-lg font-semibold">
-                Роли: {editingUser.login}
+                Сотрудник: {editingUser.login}
                 {editingUser.full_name ? ` · ${editingUser.full_name}` : ""}
               </h2>
               <p className="text-xs text-muted-foreground">
-                Отметьте роли по каждому ПО. Сохранение заменяет роли пользователя полностью.
+                Логин и роли пользователя. Старый пароль показать нельзя (хранится в
+                зашифрованном виде) — можно задать новый.
               </p>
             </div>
             <button
@@ -361,67 +438,98 @@ export default function Users() {
             </button>
           </div>
 
+          {/* логин (только просмотр) + новый пароль */}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="space-y-1 text-sm">
+              <span className="text-muted-foreground">Логин</span>
+              <input
+                type="text"
+                value={editingUser.login}
+                readOnly
+                className="w-full rounded-md border bg-muted px-3 py-2 text-sm outline-none"
+              />
+            </label>
+            <label className="space-y-1 text-sm">
+              <span className="text-muted-foreground">Новый пароль</span>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={editorPwd}
+                  onChange={(e) => setEditorPwd(e.target.value)}
+                  placeholder="задать новый пароль"
+                  autoComplete="new-password"
+                  className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
+                />
+                <button
+                  type="button"
+                  disabled={savingPwd || !editorPwd}
+                  onClick={handleSavePassword}
+                  className="whitespace-nowrap rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+                >
+                  {savingPwd ? "Сохраняем…" : "Сохранить пароль"}
+                </button>
+              </div>
+            </label>
+          </div>
+
           {editingUser.is_superadmin && (
             <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
               Это суперадмин — у него полный доступ независимо от назначенных ролей.
             </p>
           )}
 
-          {apps.length === 0 && (
-            <p className="text-sm text-muted-foreground">
-              Нет приложений с объявленными ролями (roles_hint в манифесте).
-            </p>
-          )}
-
-          <div className="space-y-4">
-            {apps.map((app) => (
-              <div key={app.app_id} className="space-y-2">
-                <h3 className="text-sm font-medium">
-                  {app.name} <span className="text-muted-foreground">· {app.app_id}</span>
-                </h3>
-                {app.roles_hint.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">
-                    В манифесте нет roles_hint — нечего назначать.
-                  </p>
-                ) : (
-                  <div className="flex flex-wrap gap-4">
-                    {app.roles_hint.map((role) => {
-                      const k = roleKey(app.app_id, role);
-                      return (
-                        <label key={k} className="flex items-center gap-2 text-sm">
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4 cursor-pointer accent-primary"
-                            checked={draftRoles.has(k)}
-                            onChange={() => toggleDraftRole(app.app_id, role)}
-                          />
-                          <span>{role}</span>
-                        </label>
-                      );
-                    })}
+          {!editingUser.is_superadmin && (
+            <div className="space-y-3">
+              <p className="text-sm font-medium">Роли по ПО</p>
+              {!hasAssignableRoles && (
+                <p className="text-sm text-muted-foreground">
+                  Нет приложений с объявленными ролями (roles_hint в манифесте).
+                </p>
+              )}
+              {apps.map((app) =>
+                app.roles_hint.length === 0 ? null : (
+                  <div key={app.app_id} className="space-y-2">
+                    <h3 className="text-sm font-medium">
+                      {app.name} <span className="text-muted-foreground">· {app.app_id}</span>
+                    </h3>
+                    <div className="flex flex-wrap gap-4">
+                      {app.roles_hint.map((role) => {
+                        const k = roleKey(app.app_id, role);
+                        return (
+                          <label key={k} className="flex items-center gap-2 text-sm">
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 cursor-pointer accent-primary"
+                              checked={draftRoles.has(k)}
+                              onChange={() => toggleDraftRole(app.app_id, role)}
+                            />
+                            <span>{roleLabel(role)}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
                   </div>
-                )}
+                ),
+              )}
+              <div className="flex items-center gap-3 pt-1">
+                <button
+                  type="button"
+                  disabled={savingRoles}
+                  onClick={handleSaveRoles}
+                  className="inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+                >
+                  {savingRoles ? "Сохраняем…" : "Сохранить роли"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditingUserId(null)}
+                  className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  Закрыть
+                </button>
               </div>
-            ))}
-          </div>
-
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              disabled={savingRoles}
-              onClick={handleSaveRoles}
-              className="inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
-            >
-              {savingRoles ? "Сохраняем…" : "Сохранить роли"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setEditingUserId(null)}
-              className="text-sm text-muted-foreground transition-colors hover:text-foreground"
-            >
-              Отмена
-            </button>
-          </div>
+            </div>
+          )}
         </section>
       )}
     </div>
