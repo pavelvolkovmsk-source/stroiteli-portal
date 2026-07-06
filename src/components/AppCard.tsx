@@ -1,16 +1,4 @@
-import {
-  BarChart3,
-  Calculator,
-  ExternalLink,
-  HardHat,
-  LayoutGrid,
-  type LucideIcon,
-  Package,
-  Phone,
-  Scale,
-  ShoppingCart,
-  Truck,
-} from "lucide-react";
+import { ExternalLink } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import { cn } from "@/lib/utils";
@@ -25,27 +13,16 @@ import {
 } from "@/components/ui/card";
 import StatusBadge from "@/components/StatusBadge";
 import type { AppTile } from "@/lib/apps";
+import { appIcon } from "@/lib/appIcons";
 
 /**
  * Плитка одного модуля экосистемы: иконка, название, описание, статус
  * и кнопка «Открыть». Если интерфейс ещё не подключён (ui_url === null),
  * кнопка неактивна и показывается подпись «Интерфейс подключается».
  */
-/** Иконки модулей экосистемы (lucide) — без эмодзи, по дизайн-канону. */
-const APP_ICONS: Record<string, LucideIcon> = {
-  legal: Scale,
-  cost: Calculator,
-  op_cabinet: Phone,
-  team_cabinet: HardHat,
-  purchases: ShoppingCart,
-  warehouse: Package,
-  logistics: Truck,
-  analytics: BarChart3,
-};
-
 export default function AppCard({ app }: { app: AppTile }) {
   const hasUi = app.ui_url !== null;
-  const Icon = APP_ICONS[app.app_id] ?? LayoutGrid;
+  const Icon = appIcon(app.app_id);
   const navigate = useNavigate();
 
   const open = () => {

@@ -8,7 +8,6 @@ import {
   LayoutGrid,
   ShieldCheck,
   Users as UsersIcon,
-  Calculator,
   KeyRound,
   LogOut,
   PanelLeftClose,
@@ -18,6 +17,7 @@ import {
 import { cn } from "@/lib/utils";
 import { clearToken, decodeToken, isSuperadmin } from "@/lib/auth";
 import { getAppsUi, type AppUi } from "@/lib/hubApi";
+import { appIcon } from "@/lib/appIcons";
 
 const NAV_COLLAPSED_KEY = "cabinet_nav_collapsed";
 
@@ -165,6 +165,7 @@ export default function AppLayout() {
           ))}
           {embeddedApps.map((app) => {
             const label = app.ui?.title ?? app.name;
+            const AppTabIcon = appIcon(app.app_id);
             return (
               <NavLink
                 key={app.app_id}
@@ -180,7 +181,7 @@ export default function AppLayout() {
                   )
                 }
               >
-                <Calculator className="h-4 w-4 shrink-0" />
+                <AppTabIcon className="h-4 w-4 shrink-0" />
                 {!collapsed && label}
               </NavLink>
             );
