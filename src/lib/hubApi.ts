@@ -282,5 +282,31 @@ export interface AppUi {
   status: string;
 }
 
+// ── полный реестр приложений (вкладка «API») ──────────────────────────────────
+export interface PermissionModule {
+  id: string;
+  label?: string;
+  icon?: string;
+  subgroups?: string[];
+  actions?: string[];
+}
+
+export interface AppFull {
+  app_id: string;
+  name: string;
+  version: string;
+  base_url: string;
+  status: string;
+  subscribes_to: string[];
+  publishes: string[];
+  reads_bitrix_fields: string[];
+  writes_bitrix_fields: string[];
+  permissions?: { modules?: PermissionModule[]; roles_hint?: string[] };
+  ui?: AppUiBlock;
+}
+
+/** Полный реестр приложений — только суперадмину (Hub: `require_roles` + is_superadmin). */
+export const getApps = () => req<{ items: AppFull[]; total: number }>("/api/v1/apps");
+
 export const getAppsUi = () =>
   req<{ items: AppUi[]; total: number }>("/api/v1/apps/ui");
