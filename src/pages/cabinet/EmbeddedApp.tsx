@@ -48,23 +48,28 @@ export default function EmbeddedApp() {
     }
   }, [app]);
 
-  // Отвечаем встроенному приложению текущим Hub-JWT по запросу (cost:need-token).
+  // Отвечаем встроенному приложению текущим Hub-JWT по запросу (`${appId}:need-token`).
+  // Префикс — сам app_id встроенного приложения, не захардкожен под конкретное ПО:
+  // так работает и для cost ("cost:need-token"/"cost:token"), и для любого другого
+  // приложения с "embed": "iframe" в манифесте (team_cabinet, purchases и т.д.).
   useEffect(() => {
-    if (!childOrigin) return;
+    if (!childOrigin || !appId) return;
+    const needTokenType = `${appId}:need-token`;
+    const tokenType = `${appId}:token`;
     const onMessage = (event: MessageEvent) => {
       if (event.origin !== childOrigin) return; // только наш фрейм
       const data = event.data as { type?: string } | null;
-      if (data?.type === "cost:need-token") {
+      if (data?.type === needTokenType) {
         const token = getToken();
         iframeRef.current?.contentWindow?.postMessage(
-          { type: "cost:token", token: token ?? "" },
+          { type: tokenType, token: token ?? "" },
           childOrigin,
         );
       }
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [childOrigin]);
+  }, [childOrigin, appId]);
 
   if (error) {
     return (

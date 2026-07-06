@@ -11,6 +11,7 @@ import {
   ShoppingCart,
   Truck,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -45,9 +46,16 @@ const APP_ICONS: Record<string, LucideIcon> = {
 export default function AppCard({ app }: { app: AppTile }) {
   const hasUi = app.ui_url !== null;
   const Icon = APP_ICONS[app.app_id] ?? LayoutGrid;
+  const navigate = useNavigate();
 
   const open = () => {
-    if (app.ui_url) {
+    if (!app.ui_url) return;
+    // Встраиваемые приложения (манифест ui.embed === "iframe") открываем ВНУТРИ
+    // Кабинета (тот же путь, что и в сайдбаре) — там же передаётся Hub-JWT через
+    // postMessage, отдельного логина не требуется. Остальные — в новой вкладке.
+    if (app.embed === "iframe") {
+      navigate(`/app/${app.app_id}`);
+    } else {
       window.open(app.ui_url, "_blank", "noopener,noreferrer");
     }
   };

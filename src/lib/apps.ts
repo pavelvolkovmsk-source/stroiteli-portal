@@ -3,9 +3,12 @@
  *
  * Это локальный «справочник по умолчанию»: портал обязан работать даже без
  * поднятого Hub. На маунте дашборд best-effort подмёрживает к этому списку
- * актуальные статусы/имена из Hub (GET ${VITE_HUB_URL}/api/v1/apps) по app_id —
- * см. mergeWithHub ниже.
+ * актуальные статусы/ui_url/embed из Hub (GET /api/v1/apps/ui, см. lib/hubApi.ts
+ * getAppsUi — тот же авторизованный запрос, что уже использует сайдбар) по
+ * app_id — см. mergeWithHub ниже.
  */
+
+import type { AppUi } from "@/lib/hubApi";
 
 /** Статус подключения модуля к экосистеме. */
 export type AppStatus = "active" | "in_progress" | "planned";
@@ -22,6 +25,9 @@ export interface AppTile {
   status: AppStatus;
   /** Адрес интерфейса модуля; null — интерфейс ещё не подключён. */
   ui_url: string | null;
+  /** Способ встраивания из манифеста ("iframe" — открыть внутри Кабинета,
+   *  "external"/не задан — открыть в новой вкладке). */
+  embed?: string;
   /** Эмодзи-иконка на плитку. */
   icon: string;
   /** Tailwind-классы акцентной плашки иконки. */
@@ -118,15 +124,6 @@ export const STATUS_BADGE: Record<AppStatus, string> = {
   planned: "bg-slate-100 text-slate-600 ring-slate-500/20",
 };
 
-/** Сырой элемент ответа Hub `GET /api/v1/apps` (поля могут отсутствовать). */
-interface HubApp {
-  app_id?: unknown;
-  id?: unknown;
-  name?: unknown;
-  status?: unknown;
-  ui_url?: unknown;
-}
-
 const KNOWN_STATUSES: readonly AppStatus[] = [
   "active",
   "in_progress",
@@ -140,25 +137,20 @@ function isAppStatus(value: unknown): value is AppStatus {
 }
 
 /**
- * Подмёрживает данные Hub к локальному справочнику по app_id.
- * Обновляются только понятные нам поля (name/status/ui_url) и только для
- * уже известных плиток — неизвестные app_id из Hub игнорируем, чтобы не
- * показывать «сырые» записи без иконок/описаний. Возвращает НОВЫЙ массив.
+ * Подмёрживает данные Hub (`GET /api/v1/apps/ui`, см. `getAppsUi` в hubApi.ts —
+ * тот же авторизованный запрос, что уже использует сайдбар) к локальному
+ * справочнику по app_id. Обновляются только понятные нам поля
+ * (name/status/ui_url/embed) и только для уже известных плиток — неизвестные
+ * app_id из Hub игнорируем, чтобы не показывать «сырые» записи без
+ * иконок/описаний. Возвращает НОВЫЙ массив.
  */
-export function mergeWithHub(base: AppTile[], hubData: unknown): AppTile[] {
-  if (!Array.isArray(hubData)) return base;
+export function mergeWithHub(base: AppTile[], hubApps: AppUi[]): AppTile[] {
+  if (!Array.isArray(hubApps) || hubApps.length === 0) return base;
 
-  const byId = new Map<string, HubApp>();
-  for (const raw of hubData) {
-    if (typeof raw !== "object" || raw === null) continue;
-    const item = raw as HubApp;
-    const key = item.app_id ?? item.id;
-    if (typeof key === "string" && key.length > 0) {
-      byId.set(key, item);
-    }
+  const byId = new Map<string, AppUi>();
+  for (const item of hubApps) {
+    if (item?.app_id) byId.set(item.app_id, item);
   }
-
-  if (byId.size === 0) return base;
 
   return base.map((tile) => {
     const hub = byId.get(tile.app_id);
@@ -171,10 +163,12 @@ export function mergeWithHub(base: AppTile[], hubData: unknown): AppTile[] {
     if (isAppStatus(hub.status)) {
       merged.status = hub.status;
     }
-    if (typeof hub.ui_url === "string" && hub.ui_url.trim().length > 0) {
-      merged.ui_url = hub.ui_url;
-    } else if (hub.ui_url === null) {
-      merged.ui_url = null;
+    const ui_url = hub.ui?.ui_url;
+    if (typeof ui_url === "string" && ui_url.trim().length > 0) {
+      merged.ui_url = ui_url;
+    }
+    if (typeof hub.ui?.embed === "string") {
+      merged.embed = hub.ui.embed;
     }
     return merged;
   });

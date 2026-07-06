@@ -2,38 +2,32 @@ import { useEffect, useState } from "react";
 
 import AppCard from "@/components/AppCard";
 import { APPS, mergeWithHub, type AppTile } from "@/lib/apps";
+import { getAppsUi } from "@/lib/hubApi";
 
 /**
  * Главная страница портала — «Кабинет руководителя».
  *
  * Показывает сетку плиток всех модулей экосистемы «Строители».
- * На маунте best-effort пытается обогатить статусы/имена данными из Hub
- * (GET ${VITE_HUB_URL}/api/v1/apps). Если Hub недоступен или вернул ошибку —
- * молча используем локальный справочник: портал работает и без Hub.
+ * На маунте best-effort пытается обогатить статусы/ui_url/embed данными из Hub
+ * (авторизованный `getAppsUi()` — та же функция, что уже использует сайдбар для
+ * встраиваемых вкладок). Если Hub недоступен/токена нет — молча используем
+ * локальный справочник: портал работает и без Hub.
  */
 export default function Dashboard() {
   const [apps, setApps] = useState<AppTile[]>(APPS);
 
   useEffect(() => {
-    const controller = new AbortController();
-
-    async function enrichFromHub() {
-      try {
-        const base = import.meta.env.VITE_HUB_URL ?? "http://localhost:8000";
-        const res = await fetch(`${base}/api/v1/apps`, {
-          signal: controller.signal,
-          headers: { Accept: "application/json" },
-        });
-        if (!res.ok) return; // 401 / 404 / 5xx — тихо игнорируем
-        const data: unknown = await res.json();
-        setApps(mergeWithHub(APPS, data));
-      } catch {
-        // Hub недоступен / CORS / abort — остаёмся на локальном конфиге
-      }
-    }
-
-    void enrichFromHub();
-    return () => controller.abort();
+    let cancelled = false;
+    getAppsUi()
+      .then((page) => {
+        if (!cancelled) setApps(mergeWithHub(APPS, page.items));
+      })
+      .catch(() => {
+        // Hub недоступен / нет токена — остаёмся на локальном справочнике
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return (
