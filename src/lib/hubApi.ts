@@ -275,10 +275,19 @@ export interface AppUiBlock {
   embed?: string;
 }
 
+/** Человекочитаемая интеграция из блока flows манифеста (для «Карты интеграций»). */
+export interface AppFlow {
+  direction?: string; // "in" | "out"
+  counterpart?: string;
+  what?: string;
+  tech?: string;
+}
+
 export interface AppUi {
   app_id: string;
   name: string;
   ui: AppUiBlock;
+  flows?: AppFlow[];
   status: string;
 }
 
