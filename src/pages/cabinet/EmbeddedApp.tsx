@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 
 import { getToken } from "@/lib/auth";
-import { getAppsUi, type AppUi } from "@/lib/hubApi";
+import { exchangeToken, getAppsUi, type AppUi } from "@/lib/hubApi";
 
 /**
  * Встроенное приложение экосистемы (iframe). Используется для калькулятора cost:
@@ -14,6 +14,32 @@ export default function EmbeddedApp() {
   const [apps, setApps] = useState<AppUi[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  // App-scoped токен для встроенного ПО: логин-токен имеет app_id=cost и в legal/др.
+  // даёт 403 (require_access смотрит роли/скоупы ЭТОГО app_id). Обмениваем на токен
+  // целевого appId, iframe рендерим только когда токен готов (без гонки need-token).
+  const [appToken, setAppToken] = useState<string | null>(null);
+  const [tokenReady, setTokenReady] = useState(false);
+
+  useEffect(() => {
+    if (!appId) return;
+    let cancelled = false;
+    setTokenReady(false);
+    setAppToken(null);
+    exchangeToken(appId)
+      .then((t) => {
+        if (!cancelled) setAppToken(t);
+      })
+      .catch(() => {
+        // Грейсфул: если обмен недоступен — отдаём текущий токен (как раньше).
+        if (!cancelled) setAppToken(getToken());
+      })
+      .finally(() => {
+        if (!cancelled) setTokenReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [appId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -60,7 +86,7 @@ export default function EmbeddedApp() {
       if (event.origin !== childOrigin) return; // только наш фрейм
       const data = event.data as { type?: string } | null;
       if (data?.type === needTokenType) {
-        const token = getToken();
+        const token = appToken ?? getToken();
         iframeRef.current?.contentWindow?.postMessage(
           { type: tokenType, token: token ?? "" },
           childOrigin,
@@ -69,7 +95,7 @@ export default function EmbeddedApp() {
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [childOrigin, appId]);
+  }, [childOrigin, appId, appToken]);
 
   if (error) {
     return (
@@ -85,7 +111,7 @@ export default function EmbeddedApp() {
       </div>
     );
   }
-  if (!src) {
+  if (!src || !tokenReady) {
     return <p className="text-sm text-muted-foreground">Загрузка…</p>;
   }
 

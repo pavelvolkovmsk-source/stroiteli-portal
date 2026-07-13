@@ -50,6 +50,20 @@ export async function login(loginName: string, password: string): Promise<string
   return data.access_token;
 }
 
+/**
+ * Обменять текущий login-токен (app_id=cost) на app-scoped токен другого ПО.
+ * Нужно для iframe legal и пр.: у них свои роли/скоупы, иначе cost-токен даёт 403
+ * (require_access у legal). Личность подтверждается текущим токеном (req подставит
+ * Authorization), пароль не нужен.
+ */
+export async function exchangeToken(appId: string): Promise<string> {
+  const data = await req<{ access_token: string }>("/api/v1/auth/exchange", {
+    method: "POST",
+    body: JSON.stringify({ app_id: appId }),
+  });
+  return data.access_token;
+}
+
 // ── права ─────────────────────────────────────────────────────────────────────
 export interface PermModule {
   id: string;
